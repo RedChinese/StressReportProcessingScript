@@ -11,36 +11,49 @@ import xlwings as xw
 # import PySimpleGUI as sg
 from shutil import copyfile
 
-print(Path.home())  # 根目录
-reportDirectoryPath = os.path.join(os.getcwd(), "report/")
-excelSandboxPath = "Library/Containers/com.microsoft.Excel/Data/"  # 沙盒路径
-excelSandboxPath = os.path.join(Path.home(), excelSandboxPath)
-print(excelSandboxPath)
-templatePath = os.path.join(excelSandboxPath, "template/usiTemplate.xlsx")
-selfTemplatePath=os.path.join(os.getcwd(),"template/usiTemplate.xlsx")
-rawDataPath = "RawData/"  # 原始数据文件夹
-rawDataPath = os.path.join(excelSandboxPath, rawDataPath)  # 拼接文件路径
-cpcmd="cp -r "+os.path.join(os.getcwd(),"data/*") +" "+rawDataPath
-os.system(cpcmd)
-os.system("open "+rawDataPath)
-fixtureNamePaths = os.listdir(rawDataPath)  # 获取下面的文件路径
-fixtureNamePaths.remove('.DS_Store')  # 删除隐藏文件夹
-print(fixtureNamePaths)
-# Paths=[
-#     {'rawFileDirectory':"","reportfilePath":""}
-
-# ]
+def copyFile(sourcePath ,targetPath):#copy raw data file
+    cpcmd="cp -r {0} {1}".format(sourcePath,targetPath)
+    print("copy cmd:",cpcmd)
+    os.system(cpcmd)
+def checkFile(files):#check and move .DS_Store 
+    allfilePaths=files
+    for path in files:
+        if path==".DS_Store":
+            allfilePaths.remove('.DS_Store')
+    return allfilePaths
+# Paths=[{'rawFileDirectory':"","reportfilePath":""}]
 filePaths = []
+def checkAndCreateDirectory(paths):
+    if(os.path.exists(paths)):
+        print("check path pass path:",paths)
+    else:
+        os.makedirs(paths)
+        checkAndCreateDirectory(paths)
+
+def getFullpath(fixtureNames):
+    filePaths=[]
+    for i, fixtureId in enumerate(fixtureNames):
+        buff = {}
+        buff["fixtureid"] = fixtureId
+        rawDataFileSandboxDirectory = os.path.join(rawDataSandboxPath, fixtureId)  # 完整路径
+        tempReportFilePath = os.path.join(tempReportPath, fixtureId+".xlsx")
+        buff["rawFileDirectory"] = rawDataFileSandboxDirectory
+        buff["tempReportFilePath"] = tempReportFilePath
+        buff["reportPath"]=os.path.join(reportDirectoryPath,fixtureId+".xlsx")
+        print(buff)
+        filePaths.append(buff)
+    return filePaths
 
 
-for i, fixtureID in enumerate(fixtureNamePaths):
-    buff = {}
-    completePath = os.path.join(rawDataPath, fixtureID)  # 完整路径
-    reportPath = os.path.join(reportDirectoryPath, fixtureID+".xlsx")
-    buff["rawFileDirectory"] = completePath
-    buff["reportfilePath"] = reportPath
-    buff["FixtureID"] = fixtureID
-    filePaths.append(buff)
+
+# for i, fixtureID in enumerate(fixtureNamePaths):
+#     buff = {}
+#     completePath = os.path.join(rawDataPath, fixtureID)  # 完整路径
+#     reportPath = os.path.join(reportDirectoryPath, fixtureID+".xlsx")
+#     buff["rawFileDirectory"] = completePath
+#     buff["reportfilePath"] = reportPath
+#     buff["FixtureID"] = fixtureID
+#     filePaths.append(buff)
 
 
 def read_img(zipfile_path):
@@ -88,6 +101,7 @@ def unzip_file(zipfile_path):
 # 修改指定目录下的文件类型名，将excel后缀名修改为.zip
 def change_file_name(sourcepath, new_type='.zip'):
     backupath = os.path.join(os.getcwd(), "backup")
+    checkAndCreateDirectory(backupath)
     file_name = os.path.basename(sourcepath)  # 获取文件名
     backupath_path = os.path.join(backupath, file_name)
     print(backupath_path)
@@ -113,19 +127,19 @@ def writebuff(filePaths):
     for fileindex, filePath in enumerate(filePaths) :
         # sg.one_line_progress_meter('实时进度条', fileindex + 1, len(count), '-文件转换进度-')
         # app=xw.App(visible=False,add_book=False)
-        app = xw.App()
-        templatewb = app.books.open(templatePath)
+        templatewb = xw.Book(templateFileSandboxPath)
         templatesheet = templatewb.sheets["Sheet1"]
         rawFileDirectory = filePath["rawFileDirectory"]
-        repoetPath = filePath["reportfilePath"]
-        templatesheet.range("B4").value = filePath["FixtureID"]
+        tempReportFilePath = filePath["tempReportFilePath"]
+        templatesheet.range("B4").value = filePath["fixtureid"]
+        reportPath=filePath["reportPath"]
         picturesindex = 0
         for index1 in range(2):
             for index2 in range(6):
                 rawdatafilepath = os.path.join(
                     rawFileDirectory, "{0}-{1}.xlsx".format(index1+1, index2+1))
                 print(rawdatafilepath)
-                buffWb = app.books.open(rawdatafilepath)
+                buffWb = xw.Book(rawdatafilepath)
                 buffsheet = buffWb.sheets["Sheet1"]
                 picturesindex = index1 == 0 and index2 or index1*6+index2
                 for index in range(8):
@@ -136,14 +150,12 @@ def writebuff(filePaths):
                         str(startRowIndex*(index2+1) + index1*8+index)
                     reportMinIndexKey = "D" + \
                         str(startRowIndex*(index2+1) + index1*8+index)
-                    print("reportMaxIndexKey", reportMaxIndexKey)
-                    print("reportMinIndexKey", reportMinIndexKey)
+                    print("Key1:{0} Key2{1}".format(reportMaxIndexKey,reportMinIndexKey))
                     templatesheet.range(reportMaxIndexKey).value = buffsheet.range(
                         rawDataMaxIndexKey).value
                     templatesheet.range(reportMinIndexKey).value = buffsheet.range(
                         rawDataMinIndexKey).value
-                    print(buffsheet.range(rawDataMaxIndexKey).value)
-                    print(buffsheet.range(rawDataMinIndexKey).value)
+                    print("MAX:{0} MIn:{1}".format(buffsheet.range(rawDataMaxIndexKey).value,buffsheet.range(rawDataMinIndexKey).value))
                 buffWb.close()
                 imgpath = read_img(unzip_file(
                     change_file_name(rawdatafilepath)))
@@ -156,12 +168,53 @@ def writebuff(filePaths):
                 templatesheet.pictures.add(imgpath, left=templatesheet.range(
                     picturesindexKey).left, top=templatesheet.range(picturesindexKey).top)
         print(templatesheet.pictures)
-        templatewb.save(repoetPath)
+        templatewb.save(tempReportFilePath)
         templatewb.close()
-        app.quit()
+       
+        os.system("mv {0} {1}".format(tempReportFilePath,reportPath))
+
+        
 
 
+print("user path",Path.home())  # User Path
+reportDirectoryPath = os.path.join(os.getcwd(), "report/")
+checkAndCreateDirectory(reportDirectoryPath)
+# Sandbox path
+excelSandboxPath = "Library/Containers/com.microsoft.Excel/Data/" 
+# Excel full sandbox path
+excelSandboxPath = os.path.join(Path.home(), excelSandboxPath)  
+print("excel SandBox directory:",excelSandboxPath)
+# template file Sandbox Path
+templateFileSandboxPath = os.path.join(excelSandboxPath, "template/")
+print("template SandBox directory:",templateFileSandboxPath)
+checkAndCreateDirectory(templateFileSandboxPath)
+#Template file path
+templateFileSandboxPath=os.path.join(templateFileSandboxPath,"usiTemplate.xlsx")
+print("template SandBox path:",templateFileSandboxPath)
+templateFilePath=os.path.join(os.getcwd(),"template/usiTemplate.xlsx")
+print("template file path:",templateFilePath)
+rawDataSandboxPath = os.path.join(excelSandboxPath, "RawData/")  # 
+rawDataPath=os.path.join(os.getcwd(),"data/*")
+fixtureNamePaths =checkFile(os.listdir(rawDataSandboxPath))   # 获取下面的文件路径
+tempReportPath=os.path.join(excelSandboxPath,"tempReport/")
+checkAndCreateDirectory(tempReportPath)#   报告临时存放路径
+os.system("open {0}".format(tempReportPath))
+print(tempReportPath)
+print(fixtureNamePaths)
+filePaths=getFullpath(fixtureNamePaths)
 writebuff(filePaths)
+
+# for i, fixtureID in enumerate(fixtureNamePaths):
+#     buff = {}
+#     completePath = os.path.join(rawDataPath, fixtureID)  # 完整路径
+#     reportPath = os.path.join(reportDirectoryPath, fixtureID+".xlsx")
+#     buff["rawFileDirectory"] = completePath
+#     buff["reportfilePath"] = reportPath
+#     buff["FixtureID"] = fixtureID
+#     filePaths.append(buff)
+
+# print(filePaths)
+
 
 
 # templatePath="./template/usiTemplate.xlsx"
