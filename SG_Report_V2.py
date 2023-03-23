@@ -10,7 +10,7 @@ import xlwings as xw
 # import time
 # import PySimpleGUI as sg
 from shutil import copyfile
-print("main")
+print("debug001")
 def copyFile(sourcePath ,targetPath):#copy raw data file
     cpcmd="cp -r {0} {1}".format(sourcePath,targetPath)
     print("copy cmd:",cpcmd)
